@@ -1,0 +1,332 @@
+---
+title: "modding"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{modding}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r}
+get_imputed <- function(d) {
+  purrr::map2_dbl(r_indx$n, r_indx$p, \(x, y) {
+    if (d[x, y] < 0) {
+      return(0)
+    }
+    if (d[x, y] > 1) {
+      return(1)
+    }
+    return(d[x, y])
+  })
+}
+```
+
+# mod imputePCA
+```{r setup}
+library(profvis)
+library(tictoc)
+load_all()
+
+set.seed(1234)
+
+r_indx$mod_fit <- NULL
+beta_miss |> dim()
+
+tic()
+mod_fit <- beta_miss |> methyl_imputePCA(ncp = 2)
+toc()
+
+r_indx$mod_fit <- get_imputed(mod_fit$completeObs)
+r_indx
+
+all(dplyr::near(r_indx$mod_fit, r_indx$after_ipca_ncp2))
+```
+
+```{r setup}
+p <- profvis(methyl_imputePCA(beta_miss))
+p1 <- profvis(imputePCA(beta_miss))
+
+p
+p1
+```
+
+## SVD
+```{r}
+library(Matrix)
+library(rsvd)
+
+Xhat <- readRDS("data-raw/Xhat.rds")
+dim(Xhat)
+
+n <- 49
+microbenchmark::microbenchmark(
+  # irlba::irlba(Xhat, nv = n),
+  # FactoMineR::svd.triplet(Xhat, ncp = n),
+  corpcor::fast.svd(Xhat),
+  rsvd::rsvd(Xhat, n),
+  times = 10
+)
+
+ncp_est <- estim_ncpPCA(beta_miss, ncp.max = 20)
+```
+
+* `corpcor::fast.svd(Xhat)` Seems to be offer the best trade off if ncp can range 
+from 2 to whatever. 
+* `irlba::irlba` iterative is actually the fastest if d is small enough. This 
+is usually the case for n < 10
+
+```{r}
+Xhat <- readRDS("data-raw/Xhat.rds")
+n <- 3
+svdeez <- list()
+
+svd(Xhat, n, n)
+irlba_wrapper(Xhat, n, n)
+
+svdeez$svd <- svd(Xhat, nu = n, nv = n)
+svdeez$svd |> lapply(dim)
+round(svdeez$svd$d, 4)
+
+svdeez$default <- FactoMineR::svd.triplet(Xhat, ncp = n)
+svdeez$default |> lapply(dim)
+
+svdeez$irlba <- irlba::irlba(Xhat, nv = n)
+svdeez$irlba |> lapply(dim)
+svdeez$irlba$d
+
+svdeez$corpo <- fast_svd_wrapper(Xhat, n)
+svdeez$corpo |> lapply(dim)
+
+svdeez$irlba$u
+waldo::compare(
+  svdeez$irlba$u,
+  svdeez$corpo$U
+)
+```
+
+* Seed should be set outside of function
+* We don't need the row weights so we can just use colMeans/colSDs for speed up
+* If we always use scaling, then we can replace a lot of calls and checks
+* We don't need quali sup because all the technical errors are already observed
+in the cpg matrix
+
+Change
+* `estim_ncpPCA` doesn't use `ind.sub` and `quali.sub` and `quanti.sup` anyway, 
+so we remove them.    
+* Looks like seed is `NULL` as default. So we can just remove it
+
+```{r}
+sum(1:10)
+res <- sum(V * poids, na.rm = TRUE) / sum(poids[!is.na(V)])
+```
+
+Old name space
+```{r}
+# export(estim_ncpFAMD, estim_ncpPCA, estim_ncpMCA, estim_ncpMultilevel, imputeCA, imputeFAMD, imputeMCA, imputeMFA, imputeMultilevel, imputePCA, MIMCA, MIFAMD, MIPCA, Overimpute, prelim, plot.MIPCA, plot.MIMCA)
+# import(doParallel)
+# import(foreach)
+# import(parallel)
+# importFrom(FactoMineR, PCA, MCA, svd.triplet, coord.ellipse, reconst, tab.disjonctif.prop, plot.PCA)
+# importFrom(ggplot2, aes, geom_point, guides, guide_legend)
+# importFrom(graphics, plot, points, abline, segments, legend, par, mtext)
+# importFrom(grDevices, dev.new, heat.colors)
+# importFrom(mice, as.mids)
+# importFrom(mvtnorm, rmvnorm)
+# importFrom(stats, var, sd, rnorm, quantile, aggregate)
+# importFrom(utils, txtProgressBar, setTxtProgressBar)
+#
+# S3method(plot, MIPCA)
+# S3method(plot, MIMCA)
+```
+
+# mod estim_ncpPCA
+```{r}
+library(tictoc)
+load_all()
+
+set.seed(1234)
+
+beta_miss |> dim()
+
+tic()
+estim <- estim_ncpPCA(beta_miss, ncp.min = 10, ncp.max = 10, method.cv = "Kfold")
+toc()
+
+estim
+
+tic()
+estim2 <- methyl_estim_ncpPCA(beta_miss, ncp.min = 2, ncp.max = 15, maxiter = 2000)
+toc()
+
+waldo::compare(estim, estim2, tolerance = .Machine$double.eps^0.5)
+
+# R> data("tiger", package = "rsvd")
+data("tiger", package = "rsvd")
+image(tiger, col = gray(0:255 / 255))
+tiger |> dim()
+```
+
+```{r}
+load_all()
+library(furrr)
+library(profvis)
+plan(multisession, workers = 6)
+
+set.seed(12345)
+test <- kfold_estim_ncpPCA(beta_miss, 1, furrr_options(seed = TRUE), nbsim = 200)
+test$job
+
+prof <-
+  profvis({
+    kfold_estim_ncpPCA(beta_miss, 2, furrr_options(seed = TRUE), nbsim = 200)
+  })
+
+prof
+plan(sequential)
+```
+
+# mod imputeMCA
+Lots of questionnaires are very fat. We use the same trick of wrapping it in
+fast svd to improve speed. We can sacrifice the supplementary 
+individuals/variables for common use case of not having these variables
+
+```{r}
+library(missMDA)
+library(dplyr)
+
+data(vnf)
+vnf1 <- vnf |> 
+  mutate(across(.cols = everything(), .fns = as.factor))
+## First the number of components has to be chosen
+##   (for the reconstruction step)
+## nb <- estim_ncpMCA(vnf,ncp.max=5) ## Time-consuming, nb = 4
+
+## Impute the indicator matrix and perform a MCA
+debug(imputeMCA)
+res.impute <- imputeMCA(vnf, ncp = 4)
+undebug(imputeMCA)
+
+res.impute
+
+load_all()
+
+tab.disjonctif.NA(vnf) |> head()
+vnf |> head()
+
+modalite.disjonctif <- function(i, tab) {
+  moda <- tab[, i]
+  nom <- names(tab)[i]
+  n <- length(moda)
+  moda <- as.factor(moda)
+  x <- matrix(0, n, length(levels(moda)))
+  ind <- (1:n) + n * (unclass(moda) - 1)
+  indNA <- which(is.na(ind))
+  x[(1:n) + n * (unclass(moda) - 1)] <- 1
+  x[indNA,] <- NA
+  if ((ncol(tab) != 1) &
+      (levels(moda)[1] %in% c(1:nlevels(moda), "n", "N", "y", "Y"))) {
+    dimnames(x) <-
+      list(row.names(tab), paste(nom, levels(moda), sep = "."))
+  } else {
+    dimnames(x) <- list(row.names(tab), levels(moda))
+  }
+  return(x)
+}
+
+tab.disjonctif.NA <- function(tab) {
+  res <- lapply(1:ncol(tab), modalite.disjonctif, tab = tab)
+  res <- as.matrix(data.frame(res, check.names = FALSE))
+  
+  return(res)
+}
+
+modalite.disjonctif1 <- function(i, seed = NULL, tab) {
+  moda <- tab[, i]
+  nom <- names(tab)[i]
+  n <- length(moda)
+  moda <- as.factor(moda)
+  x <- matrix(0L, n, length(levels(moda)))
+  ind <- (1:n) + n * (unclass(moda) - 1L)
+  indNA <- which(is.na(ind))
+  x[(1:n) + n * (unclass(moda) - 1)] <- 1L
+  if (length(indNA) != 0) {
+    if (is.null(seed)) {
+      x[indNA, ] <- NA
+      x[indNA, ] <- matrix(rep(apply(x, 2, moy.p, row.w),
+                               each = length(indNA)), nrow = length(indNA))
+      x[indNA, ] <- matrix(rep(apply(x, 2, sum) / sum(x),
+                               each = length(indNA)), nrow = length(indNA))
+    }
+    else {
+      for (k in 1:length(indNA)) {
+        aux <- runif(length(levels(moda)))
+        x[indNA[k], ] <- aux / sum(aux)
+      }
+    }
+  }
+  if ((ncol(tab) != 1) &
+      (levels(moda)[1] %in% c(1:nlevels(moda),
+                              "n", "N", "y", "Y")))
+    dimnames(x) <-
+    list(row.names(tab), paste(nom, levels(moda),
+                               sep = "."))
+  else
+    dimnames(x) <- list(row.names(tab), levels(moda))
+  return(x)
+}
+
+moy.p <- function(V, poids) {
+  res <- sum(V * poids, na.rm = TRUE) / sum(poids[!is.na(V)])
+}
+
+tab.disjonctif.prop <- function (tab, seed = NULL, row.w = NULL) {
+  if (!is.null(seed)) {
+    set.seed(seed)
+  }
+
+  if (is.null(row.w)) {
+    row.w <- rep(1 / nrow(tab), nrow(tab))
+  }
+  
+  tab <- as.data.frame(tab)
+  isQuali <- which(!sapply(tab, is.numeric)) # is not numeric
+  if (length(isQuali) == 0)
+    return(tab)
+  for (k in isQuali)
+    tab[, k] <- as.factor(tab[, k])
+
+  if (ncol(tab) == 1)
+    res <- modalite.disjonctif(1)
+  else {
+    res <- lapply(1:ncol(tab), modalite.disjonctif1, tab = tab)
+    res <- as.matrix(data.frame(res, check.names = FALSE))
+  }
+  return(res)
+}
+
+debug(modalite.disjonctif1)
+modalite.disjonctif1(1, tab = vnf1)
+undebug(modalite.disjonctif1)
+
+load_all()
+
+a <- imputeMCA(vnf)
+b <- imputeMCA(vnf, seed = 1)
+c <- imputeMCA(vnf, seed = 2)
+d <- imputeMCA(vnf, seed = 3)
+
+waldo::compare(a$completeObs, b$completeObs)
+waldo::compare(c$completeObs, b$completeObs)
+waldo::compare(c$completeObs, d$completeObs)
+
+?imputeMCA
+```
+
+
