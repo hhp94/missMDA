@@ -35,7 +35,7 @@ mod_svd <- function(X, ncp = Inf, svd_fns, ...) {
   ## and leave the rest as NA
   
   # svd.usuelle <- mod.tryCatch.W.E1(svd(t(X), nu = ncp, nv = ncp))$val
-  svd.usuelle <- mod.tryCatch.W.E1(fast.svd.wrap(X = t(X), ncp = ncp))$val
+  svd.usuelle <- mod.tryCatch.W.E1(svd_fns(X = t(X), ncp = ncp))$val
   
   if (names(svd.usuelle)[[1]] == "message") {
     warning("svd returned message")

@@ -2,12 +2,11 @@
 % Please edit documentation in R/mod_imputeMCA.R
 \name{modded_imputeMCA}
 \alias{modded_imputeMCA}
-\title{Modded imputeMCA using sparsesvd}
+\title{Modded imputeMCA by Refractoring}
 \usage{
 modded_imputeMCA(
   don,
   ncp = 2,
-  method = c("Regularized", "EM"),
   coeff.ridge = 1,
   threshold = 1e-06,
   seed = NULL,
@@ -18,8 +17,6 @@ modded_imputeMCA(
 \item{don}{a data.frame with categorical variables containing missing values}
 
 \item{ncp}{integer corresponding to the number of dimensions used to predict the missing entries}
-
-\item{method}{"Regularized" by default or "EM"}
 
 \item{coeff.ridge}{1 by default to perform the regularized imputeMCA algorithm;
 useful only if method="Regularized". Other regularization terms can be

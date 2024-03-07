@@ -1,4 +1,4 @@
-#' Modded imputeMCA using sparsesvd
+#' Modded imputeMCA by Refractoring
 #'
 #' Mod the imputeMCA function by omitting weights and sup variables
 #'
@@ -27,10 +27,6 @@ modded_imputeMCA <-
            seed = NULL,
            maxiter = 1000) {
 
-    moy.p <- function(V, poids) {
-      res <- sum(V * poids,na.rm=TRUE)/sum(poids[!is.na(V)])
-    }
-    
     ########## Debut programme principal
     stopifnot(is.data.frame(don), all(!c("tbl_df", "tbl") %in% class(don)))
     don_class <- unique(lapply(don, class))
@@ -42,9 +38,11 @@ modded_imputeMCA <-
     )
 
     don <- droplevels(don)
+    ncol_don <- ncol(don)
+    nrow_don <- nrow(don)
     
-    # row.w <- rep(1 / nrow(don), nrow(don))
-    row.w <- rep(1, nrow(don))
+    row.w <- rep(1 / nrow_don, nrow_don)
+    # row.w <- rep(1, nrow(don))
     
     if (ncp == 0) {
       tab.disj <- tab.disjonctif.prop(don, NULL)
@@ -54,11 +52,9 @@ modded_imputeMCA <-
     
     # Convert to dummy matrix and get the coordinate of the missing values
     tab.disj.NA <- tab.disjonctif(don)
-    tab.disj.comp <- tab.disjonctif.prop(don, seed)
-    
+    tab.disj.comp <- tab.disjonctif.prop(don, seed, row.w = row.w)
+    stopifnot("tab.disjonctif.prop should not return any NA"=!anyNA(tab.disj.comp))
     # Repeatedly calculated values
-    ncol_don <- ncol(don)
-    nrow_tab <- nrow(tab.disj.comp)
     ncol_tab <- ncol(tab.disj.comp)
     ncp_vec <- seq_len(ncp)
     
@@ -75,8 +71,7 @@ modded_imputeMCA <-
       # weights are always > 0, ncol_don always > 0. So if value is smaller than
       # zero then it's not because of ncol_don
       
-      sum_weighted <- colSums(tab.disj.comp) / nrow_tab
-      # M <- apply(tab.disj.comp, 2, moy.p, row.w) / ncol_don
+      sum_weighted <- colSums(tab.disj.comp*row.w[1])
       M <- sum_weighted / ncol_don
       if (any(M < 0)) {
         stop(
@@ -91,11 +86,13 @@ modded_imputeMCA <-
       }
 
       Z <- t(t(tab.disj.comp) / sum_weighted)
-      Z <- t(t(Z) - (colSums(Z) / nrow_tab))
+      Z <- t(t(Z) - colSums(Z*row.w[1]))
       Zscale <- t(t(Z) * sqrt(M))
 
       # Run svd based on the Zscale matrix
       svd.Zscale <- FactoMineR::svd.triplet(Zscale, row.w = row.w, ncp = ncp)
+      moyeig <- 0
+      # svd.Zscale <- mod_svd(Zscale, ncp = ncp, svd_fns = fast.svd.wrap)
       
       # Regularizing
       if (nrow(don) > (ncol_tab - ncol_don)) {

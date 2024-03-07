@@ -207,13 +207,6 @@ vnf0 <- vnf[-c(841,1073), ]
 vnf1 <- cbind(vnf, data.frame(kek = factor(NA)))
 ```
 
-```{r}
-# dummy code
-debug(modded_imputeMCA)
-modded_imputeMCA(vnf0)
-undebug(modded_imputeMCA)
-```
-
 ## moy.p
 This is a scaled colSums by the number of non missing rows per column
 - The number of non missing rows per column is fixed at the start so we only need to calculate it once instead of currently being calculated in every iteration.
@@ -243,19 +236,40 @@ moy.p(tabj.prop[, 4], row.weight)
 ```{r}
 # test_case
 for(i in 1:10) {
-  t1 <- fit_compare_fns(vnf0, ncp = i, row.w = rep(1, times = nrow(vnf0)))
+  t1 <- fit_compare_fns(vnf0, ncp = i)
   print(sum(t1$test != t1$modded_test))
 }
 ```
 
 ```{r}
 # library(microbenchmark)
+row.weight <- rep(1, nrow(vnf0))
 microbenchmark(
+  imputeMCA(vnf0, ncp = 3, row.w = row.weight),
   modded_imputeMCA(vnf0, ncp = 3),
-  imputeMCA(vnf0, ncp = 3),
   times = 20
 )
 
+profvis::profvis(imputeMCA(vnf0, ncp = 3))
+profvis::profvis(modded_imputeMCA(vnf0, ncp = 3))
+
+waldo::compare(Zscale, modded_Zscale)
+```
+
+
+```{r}
+# dummy code
+debug(modded_imputeMCA)
+modded_imputeMCA(vnf0)
+undebug(modded_imputeMCA)
+
+debug(imputeMCA)
+imputeMCA(vnf0)
+undebug(imputeMCA)
+```
+
+
+```{r}
 # test <- matrix(rnorm(500*500), 500, 500)
 # all(apply(test, 2 , sum) == colSums(test))
 # 
