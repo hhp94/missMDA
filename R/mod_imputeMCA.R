@@ -1,3 +1,14 @@
+validate_MCA <- function(don) {
+  stopifnot(is.data.frame(don), all(!c("tbl_df", "tbl") %in% class(don)))
+  don_class <- unique(lapply(don, class))
+  stopifnot(length(don_class) == 1, don_class[[1]] == "factor")
+  miss_matrix <- is.na(don)
+  stopifnot(
+    "All missing column(s) detected" = all(colSums(miss_matrix) < nrow(miss_matrix)),
+    "All missing row(s) detected" = all(rowSums(miss_matrix) < ncol(miss_matrix))
+  )
+}
+
 #' Modded imputeMCA by Refractoring
 #'
 #' Mod the imputeMCA function by omitting weights and sup variables
@@ -37,21 +48,14 @@ modded_imputeMCA <-
       svd = svd,
       stop("Not Supported")
     )
-    
+
     ########## Debut programme principal
-    stopifnot(is.data.frame(don), all(!c("tbl_df", "tbl") %in% class(don)))
-    don_class <- unique(lapply(don, class))
-    stopifnot(length(don_class) == 1, don_class[[1]] == "factor")
-    miss_matrix <- is.na(don)
-    stopifnot(
-      "All missing column(s) detected" = all(colSums(miss_matrix) < nrow(miss_matrix)),
-      "All missing row(s) detected" = all(rowSums(miss_matrix) < ncol(miss_matrix))
-    )
+    validate_MCA(don)
 
     don <- droplevels(don)
     ncol_don <- ncol(don)
     nrow_don <- nrow(don)
-    
+
     row.w <- rep(1 / nrow_don, nrow_don)
 
     if (ncp == 0) {
@@ -59,7 +63,7 @@ modded_imputeMCA <-
       compObs <- find.category.1(don, tab.disj)
       return(list(tab.disj = tab.disj, completeObs = compObs))
     }
-    
+
     # Convert to dummy matrix and get the coordinate of the missing values
     tab.disj.NA <- tab.disjonctif(don)
     tab.disj.comp <- tab.disjonctif.prop(don, seed, row.w = row.w)
@@ -67,7 +71,7 @@ modded_imputeMCA <-
     # Repeatedly calculated values
     ncol_tab <- ncol(tab.disj.comp)
     ncp_vec <- seq_len(ncp)
-    
+
     # Initialize
     hidden <- which(is.na(tab.disj.NA))
     tab.disj.rec.old <- tab.disj.comp
@@ -80,7 +84,7 @@ modded_imputeMCA <-
       stopifnot("maxiter reached"=nbiter <= maxiter)
       # weights are always > 0, ncol_don always > 0. So if value is smaller than
       # zero then it's not because of ncol_don
-      
+
       sum_weighted <- colSums(tab.disj.comp*row.w[1])
       M <- sum_weighted / ncol_don
       if (any(M < 0)) {
@@ -103,7 +107,7 @@ modded_imputeMCA <-
       # svd.Zscale <- FactoMineR::svd.triplet(Zscale, row.w = row.w, ncp = ncp)
       svd.Zscale <- mod_svd(Zscale, row.w = row.w, ncp = ncp, svd_fns = svd_fns)
       moyeig <- 0
-      
+
       # Regularizing
       if (nrow(don) > (ncol_tab - ncol_don)) {
         moyeig <- mean(svd.Zscale$vs[-c(ncp_vec, (ncol_tab - ncol_don + 1):ncol_tab)] ^ 2)
@@ -128,7 +132,7 @@ modded_imputeMCA <-
       continue <- (relch > threshold) && (nbiter < maxiter)
       # End of while loop
     }
-    
+
     compObs <- find.category.1(don, tab.disj.comp)
     return(list(tab.disj = tab.disj.comp, completeObs = compObs))
   }
@@ -163,7 +167,7 @@ get_data_clean <- function(name) {
 #' Compare Results of imputeMCA and modded_imputeMCA
 #'
 #' @param df data frame
-#' @param ... arguments passed to imputeMCA and modded_imputeMCA 
+#' @param ... arguments passed to imputeMCA and modded_imputeMCA
 #'
 #' @return test and modded_test
 fit_compare_fns <- function(df, ...) {
@@ -171,7 +175,7 @@ fit_compare_fns <- function(df, ...) {
   test_args <- args
   test_args[["svd_fns"]] <- NULL
   test <- do.call("imputeMCA", args = test_args)$completeObs
-  
+
   modded_test_args <- args
   modded_test_args[["row.w"]] <- NULL
   modded_test <- do.call("modded_imputeMCA", args = modded_test_args)$completeObs
