@@ -112,7 +112,7 @@ modded_imputeMCA <-
 
       diff <- tab.disj.rec - tab.disj.rec.old
       diff[hidden] <- 0
-      relch <- sum(diff^2)
+      relch <- sum(diff^2*row.w)
       tab.disj.rec.old <- tab.disj.rec
       tab.disj.comp[hidden] <- tab.disj.rec[hidden]
       continue <- (relch > threshold) && (nbiter < maxiter)

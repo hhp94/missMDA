@@ -244,10 +244,10 @@ for(i in 1:10) {
 ```{r}
 # library(microbenchmark)
 row.weight <- rep(1, nrow(vnf0))
-microbenchmark(
-  imputeMCA(vnf0, ncp = 3, row.w = row.weight),
+microbenchmark::microbenchmark(
+  imputeMCA(vnf0, ncp = 3),
   modded_imputeMCA(vnf0, ncp = 3),
-  times = 20
+  times = 50
 )
 
 profvis::profvis(imputeMCA(vnf0, ncp = 3))
