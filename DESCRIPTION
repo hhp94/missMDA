@@ -19,7 +19,8 @@ Imports:
     parallel,
     foreach,
     corpcor,
-    matrixStats
+    matrixStats,
+    bootSVD
 Suggests: 
     knitr,
     markdown,
@@ -35,3 +36,4 @@ Repository: CRAN
 Date/Publication: 2023-11-17 10:20:19 UTC
 Config/testthat/edition: 3
 RoxygenNote: 7.3.1
+LazyData: true

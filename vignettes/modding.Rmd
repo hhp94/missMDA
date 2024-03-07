@@ -101,7 +101,7 @@ svdeez$irlba <- irlba::irlba(Xhat, nv = n)
 svdeez$irlba |> lapply(dim)
 svdeez$irlba$d
 
-svdeez$corpo <- fast_svd_wrapper(Xhat, n)
+svdeez$corpo <- corpcor_wrapper(Xhat, n)
 svdeez$corpo |> lapply(dim)
 
 svdeez$irlba$u
@@ -231,51 +231,57 @@ moy.p(tabj.prop[, 4], row.weight)
 ```
 
 ## svd
+`corpcor_wrap`/`bootSVD_wrap` is faster than svd for most cases since most of our data is tall or thin instead of square. 
 
-## test
+We don't have to worry about signs because the author's svd.triplet handles this 
+
+But we need to build unit tests for for both tall and wide cases
+
+### test
 ```{r}
+data(sim_tall)
+data(sim_wide)
+
 # test_case
 for(i in 1:10) {
-  t1 <- fit_compare_fns(vnf0, ncp = i)
+  t1 <- fit_compare_fns(sim_tall$results, ncp = i, svd_fns = "svd")
+  print(sum(t1$test != t1$modded_test))
+}
+
+for(i in 1:10) {
+  t1 <- fit_compare_fns(sim_tall$results, ncp = i, svd_fns = "bootSVD")
+  print(sum(t1$test != t1$modded_test))
+}
+
+for(i in 1:10) {
+  t1 <- fit_compare_fns(sim_wide$results, ncp = i, svd_fns = "bootSVD")
   print(sum(t1$test != t1$modded_test))
 }
 ```
 
 ```{r}
-# library(microbenchmark)
-row.weight <- rep(1, nrow(vnf0))
+library(microbenchmark)
 microbenchmark::microbenchmark(
-  imputeMCA(vnf0, ncp = 3),
-  modded_imputeMCA(vnf0, ncp = 3),
-  times = 50
+  imputeMCA(sim_wide$results, ncp = 3),
+  modded_imputeMCA(sim_wide$results, ncp = 3, svd_fns = "corpcor"),
+  modded_imputeMCA(sim_wide$results, ncp = 3, svd_fns = "bootSVD"),
+  times = 10
 )
 
-profvis::profvis(imputeMCA(vnf0, ncp = 3))
-profvis::profvis(modded_imputeMCA(vnf0, ncp = 3))
-
-waldo::compare(Zscale, modded_Zscale)
+microbenchmark::microbenchmark(
+  modded_imputeMCA(sim_tall$results, ncp = 3, svd_fns = "svd"),
+  modded_imputeMCA(sim_tall$results, ncp = 3, svd_fns = "corpcor"),
+  modded_imputeMCA(sim_tall$results, ncp = 3, svd_fns = "bootSVD"),
+  times = 30
+)
 ```
 
+### mode estim_ncpMCA
 
+### debug
 ```{r}
 # dummy code
 debug(modded_imputeMCA)
 modded_imputeMCA(vnf0)
 undebug(modded_imputeMCA)
-
-debug(imputeMCA)
-imputeMCA(vnf0)
-undebug(imputeMCA)
-```
-
-
-```{r}
-# test <- matrix(rnorm(500*500), 500, 500)
-# all(apply(test, 2 , sum) == colSums(test))
-# 
-# microbenchmark(
-#   apply(test, 2 , sum),
-#   colSums(test),
-#   times = 100
-# )
 ```

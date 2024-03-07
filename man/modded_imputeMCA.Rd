@@ -10,6 +10,7 @@ modded_imputeMCA(
   coeff.ridge = 1,
   threshold = 1e-06,
   seed = NULL,
+  svd_fns = c("bootSVD", "corpcor", "svd"),
   maxiter = 1000
 )
 }
@@ -30,6 +31,8 @@ more (to get closer to the results of the proportion imputation)}
 initially imputed by the proportion of the category for the categorical
 variables coded with indicator matrices of dummy variables. Other values
 leads to a random initialization}
+
+\item{svd_fns}{which svd function to use "bootSVD"(default), "base", or "corpco"}
 
 \item{maxiter}{integer, maximum number of iterations for the regularized iterative
 MCA algorithm}

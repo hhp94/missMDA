@@ -14,6 +14,7 @@
 #' initially imputed by the proportion of the category for the categorical
 #' variables coded with indicator matrices of dummy variables. Other values
 #' leads to a random initialization
+#' @param svd_fns which svd function to use "bootSVD"(default), "base", or "corpco"
 #' @param maxiter integer, maximum number of iterations for the regularized iterative
 #' MCA algorithm
 #'
@@ -25,8 +26,18 @@ modded_imputeMCA <-
            coeff.ridge = 1,
            threshold = 1e-6,
            seed = NULL,
+           svd_fns = c("bootSVD", "corpcor", "svd"),
            maxiter = 1000) {
 
+    svd_fns <- match.arg(svd_fns)
+    svd_fns <- switch(
+      svd_fns,
+      bootSVD = bootSVD_wrap,
+      corpcor = corpcor_wrap,
+      svd = svd,
+      stop("Not Supported")
+    )
+    
     ########## Debut programme principal
     stopifnot(is.data.frame(don), all(!c("tbl_df", "tbl") %in% class(don)))
     don_class <- unique(lapply(don, class))
@@ -42,8 +53,7 @@ modded_imputeMCA <-
     nrow_don <- nrow(don)
     
     row.w <- rep(1 / nrow_don, nrow_don)
-    # row.w <- rep(1, nrow(don))
-    
+
     if (ncp == 0) {
       tab.disj <- tab.disjonctif.prop(don, NULL)
       compObs <- find.category.1(don, tab.disj)
@@ -90,9 +100,9 @@ modded_imputeMCA <-
       Zscale <- t(t(Z) * sqrt(M))
 
       # Run svd based on the Zscale matrix
-      svd.Zscale <- FactoMineR::svd.triplet(Zscale, row.w = row.w, ncp = ncp)
+      # svd.Zscale <- FactoMineR::svd.triplet(Zscale, row.w = row.w, ncp = ncp)
+      svd.Zscale <- mod_svd(Zscale, row.w = row.w, ncp = ncp, svd_fns = svd_fns)
       moyeig <- 0
-      # svd.Zscale <- mod_svd(Zscale, ncp = ncp, svd_fns = fast.svd.wrap)
       
       # Regularizing
       if (nrow(don) > (ncol_tab - ncol_don)) {
@@ -144,6 +154,12 @@ find.category.1 <- function(X, tabdisj) {
   return(Xres)
 }
 
+get_data_clean <- function(name) {
+  e <- new.env()
+  data(list = name, envir = e)
+  return(get(name, envir = e))
+}
+
 #' Compare Results of imputeMCA and modded_imputeMCA
 #'
 #' @param df data frame
@@ -152,8 +168,12 @@ find.category.1 <- function(X, tabdisj) {
 #' @return test and modded_test
 fit_compare_fns <- function(df, ...) {
   args <- c(list(don = df), list(...))
-  test <- do.call("imputeMCA", args = args)$completeObs
-  args[["row.w"]] <- NULL
-  modded_test <- do.call("modded_imputeMCA", args = args)$completeObs
+  test_args <- args
+  test_args[["svd_fns"]] <- NULL
+  test <- do.call("imputeMCA", args = test_args)$completeObs
+  
+  modded_test_args <- args
+  modded_test_args[["row.w"]] <- NULL
+  modded_test <- do.call("modded_imputeMCA", args = modded_test_args)$completeObs
   return(list(test = test, modded_test = modded_test))
 }

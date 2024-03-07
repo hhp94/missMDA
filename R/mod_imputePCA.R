@@ -68,7 +68,7 @@ mod_impute <-
       }
 
       # svd.res <- FactoMineR::svd.triplet(Xhat, ncp = ncp)
-      svd.res <- mod_svd(Xhat, ncp = ncp, svd_fns = fast.svd.wrap, ...)
+      svd.res <- mod_svd(Xhat, ncp = ncp, svd_fns = corpcor_wrap, ...)
 
       sigma2 <- nrX * ncX /
         min(ncX, nrX - 1) *
