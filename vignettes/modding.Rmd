@@ -205,7 +205,9 @@ vnf[c(841,1073), ]
 # vnf0 is for testing
 vnf0 <- vnf[-c(841,1073), ]
 vnf1 <- cbind(vnf, data.frame(kek = factor(NA)))
+```
 
+```{r}
 # dummy code
 debug(modded_imputeMCA)
 modded_imputeMCA(vnf0)
@@ -213,6 +215,16 @@ undebug(modded_imputeMCA)
 ```
 
 ## moy.p
+This is a scaled colSums by the number of non missing rows per column
+- The number of non missing rows per column is fixed at the start so we only need to calculate it once instead of currently being calculated in every iteration.
+- we can use colsums(x) to replace the nominator
+- then colsums(!is.na(x)) to replace the denominator. This is calculated only once.
+
+This is just sum over the columns by weight.
+
+Results: We actually slow things down by using colSums instead of apply. This is
+difficult to believe. But here we are
+
 ```{r}
 moy.p <- function(V, poids) {
   res <- sum(V * poids, na.rm = TRUE) / sum(poids[!is.na(V)])
@@ -221,14 +233,35 @@ moy.p <- function(V, poids) {
 
 row.weight <- rep(1 / nrow(vnf0), nrow(vnf0))
 tabj.prop <- FactoMineR::tab.disjonctif.prop(vnf0, row.w = row.weight)
-
+tabj.prop
 moy.p(tabj.prop[, 4], row.weight)
 ```
 
+## svd
+
+## test
 ```{r}
 # test_case
-t1 <- fit_compare_fns(vnf0, ncp = 1)
-sum(t1$test != t1$modded_test)
-waldo::compare(t1$test, t1$modded_test)
+for(i in 1:10) {
+  t1 <- fit_compare_fns(vnf0, ncp = i, row.w = rep(1, times = nrow(vnf0)))
+  print(sum(t1$test != t1$modded_test))
+}
 ```
 
+```{r}
+# library(microbenchmark)
+microbenchmark(
+  modded_imputeMCA(vnf0, ncp = 3),
+  imputeMCA(vnf0, ncp = 3),
+  times = 20
+)
+
+# test <- matrix(rnorm(500*500), 500, 500)
+# all(apply(test, 2 , sum) == colSums(test))
+# 
+# microbenchmark(
+#   apply(test, 2 , sum),
+#   colSums(test),
+#   times = 100
+# )
+```

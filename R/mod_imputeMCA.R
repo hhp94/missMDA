@@ -4,7 +4,6 @@
 #'
 #' @param don a data.frame with categorical variables containing missing values
 #' @param ncp integer corresponding to the number of dimensions used to predict the missing entries
-#' @param method "Regularized" by default or "EM"
 #' @param coeff.ridge 1 by default to perform the regularized imputeMCA algorithm;
 #' useful only if method="Regularized". Other regularization terms can be
 #' implemented by setting the value to less than 1 in order to regularized less
@@ -23,15 +22,13 @@
 modded_imputeMCA <-
   function(don,
            ncp = 2,
-           method = c("Regularized", "EM"),
            coeff.ridge = 1,
            threshold = 1e-6,
            seed = NULL,
            maxiter = 1000) {
 
     moy.p <- function(V, poids) {
-      res <- sum(V * poids, na.rm = TRUE) / sum(poids[!is.na(V)])
-      res
+      res <- sum(V * poids,na.rm=TRUE)/sum(poids[!is.na(V)])
     }
     
     ########## Debut programme principal
@@ -43,24 +40,28 @@ modded_imputeMCA <-
       "All missing column(s) detected" = all(colSums(miss_matrix) < nrow(miss_matrix)),
       "All missing row(s) detected" = all(rowSums(miss_matrix) < ncol(miss_matrix))
     )
-    
-    method <- match.arg(method, c("Regularized", "regularized", "EM", "em"), several.ok = T)[1]
-    method <- tolower(method)
+
     don <- droplevels(don)
     
     # row.w <- rep(1 / nrow(don), nrow(don))
     row.w <- rep(1, nrow(don))
     
     if (ncp == 0) {
-      tab.disj <- tab.disjonctif.prop(don, NULL, row.w = row.w)
+      tab.disj <- tab.disjonctif.prop(don, NULL)
       compObs <- find.category.1(don, tab.disj)
       return(list(tab.disj = tab.disj, completeObs = compObs))
     }
     
     # Convert to dummy matrix and get the coordinate of the missing values
     tab.disj.NA <- tab.disjonctif(don)
-    tab.disj.comp <- tab.disjonctif.prop(don, seed, row.w = row.w)
-
+    tab.disj.comp <- tab.disjonctif.prop(don, seed)
+    
+    # Repeatedly calculated values
+    ncol_don <- ncol(don)
+    nrow_tab <- nrow(tab.disj.comp)
+    ncol_tab <- ncol(tab.disj.comp)
+    ncp_vec <- seq_len(ncp)
+    
     # Initialize
     hidden <- which(is.na(tab.disj.NA))
     tab.disj.rec.old <- tab.disj.comp
@@ -70,11 +71,13 @@ modded_imputeMCA <-
 
     while (continue) {
       nbiter <- nbiter + 1
-      # weights are always > 0, ncol(don) always > 0. So if value is smaller than
-      # zero then it's not because of ncol(don)
+      stopifnot("maxiter reached"=nbiter <= maxiter)
+      # weights are always > 0, ncol_don always > 0. So if value is smaller than
+      # zero then it's not because of ncol_don
       
-      # sum_weighted
-      M <- apply(tab.disj.comp, 2, moy.p, row.w) / ncol(don)
+      sum_weighted <- colSums(tab.disj.comp) / nrow_tab
+      # M <- apply(tab.disj.comp, 2, moy.p, row.w) / ncol_don
+      M <- sum_weighted / ncol_don
       if (any(M < 0)) {
         stop(
           paste(
@@ -87,44 +90,35 @@ modded_imputeMCA <-
         )
       }
 
-      Z <- t(t(tab.disj.comp) / apply(tab.disj.comp, 2, moy.p, row.w))
-      Z <- t(t(Z) - apply(Z, 2, moy.p, row.w))
+      Z <- t(t(tab.disj.comp) / sum_weighted)
+      Z <- t(t(Z) - (colSums(Z) / nrow_tab))
       Zscale <- t(t(Z) * sqrt(M))
 
       # Run svd based on the Zscale matrix
       svd.Zscale <- FactoMineR::svd.triplet(Zscale, row.w = row.w, ncp = ncp)
-      moyeig <- 0
-      
-      NcolZscale <- ncol(Zscale)
       
       # Regularizing
-      if (nrow(don) > (NcolZscale - ncol(don))) {
-        moyeig <- mean(svd.Zscale$vs[-c(seq_len(ncp), (NcolZscale - ncol(don) + 1):NcolZscale)] ^ 2)
+      if (nrow(don) > (ncol_tab - ncol_don)) {
+        moyeig <- mean(svd.Zscale$vs[-c(ncp_vec, (ncol_tab - ncol_don + 1):ncol_tab)] ^ 2)
       } else {
-        moyeig <- mean(svd.Zscale$vs[-c(seq_len(ncp), NcolZscale:length(svd.Zscale$vs))]^2)
+        moyeig <- mean(svd.Zscale$vs[-c(ncp_vec, ncol_tab:length(svd.Zscale$vs))]^2)
       }
       moyeig <- min(moyeig * coeff.ridge, svd.Zscale$vs[ncp + 1]^2)
-      
-      if (method == "em") {
-        moyeig <- 0
-      }
-
-      eig.shrunk <- ((svd.Zscale$vs[seq_len(ncp)]^2 - moyeig) / svd.Zscale$vs[seq_len(ncp)])
-
+      eig.shrunk <- ((svd.Zscale$vs[ncp_vec]^2 - moyeig) / svd.Zscale$vs[ncp_vec])
       rec <- tcrossprod(
-        t(t(svd.Zscale$U[, seq_len(ncp), drop = FALSE]) * eig.shrunk),
-        svd.Zscale$V[, seq_len(ncp), drop = FALSE]
+        t(t(svd.Zscale$U[, ncp_vec, drop = FALSE]) * eig.shrunk),
+        svd.Zscale$V[, ncp_vec, drop = FALSE]
       )
 
       tab.disj.rec <- t(t(rec) / sqrt(M)) + matrix(1, nrow(rec), ncol(rec))
-      tab.disj.rec <- t(t(tab.disj.rec) * apply(tab.disj.comp, 2, moy.p, row.w))
+      tab.disj.rec <- t(t(tab.disj.rec) * sum_weighted)
 
       diff <- tab.disj.rec - tab.disj.rec.old
       diff[hidden] <- 0
-      relch <- sum(diff^2 * row.w)
+      relch <- sum(diff^2)
       tab.disj.rec.old <- tab.disj.rec
       tab.disj.comp[hidden] <- tab.disj.rec[hidden]
-      continue <- (relch > threshold) & (nbiter < maxiter)
+      continue <- (relch > threshold) && (nbiter < maxiter)
       # End of while loop
     }
     
@@ -160,8 +154,9 @@ find.category.1 <- function(X, tabdisj) {
 #'
 #' @return test and modded_test
 fit_compare_fns <- function(df, ...) {
-    list(
-      test = imputeMCA(df, ...)$completeObs,
-      modded_test = modded_imputeMCA(df, ...)$completeObs
-    )
-  }
+  args <- c(list(don = df), list(...))
+  test <- do.call("imputeMCA", args = args)$completeObs
+  args[["row.w"]] <- NULL
+  modded_test <- do.call("modded_imputeMCA", args = args)$completeObs
+  return(list(test = test, modded_test = modded_test))
+}
