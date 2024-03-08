@@ -4,16 +4,7 @@
 \alias{estim_ncpMCA_kfold}
 \title{Perform `modded_estim_ncpMCA` with K-fold CV}
 \usage{
-estim_ncpMCA_kfold(
-  don,
-  vrai.tab,
-  ncp.min,
-  ncp.max,
-  nbsim,
-  pNA,
-  threshold,
-  verbose
-)
+estim_ncpMCA_kfold(don, ncp.min, ncp.max, nbsim, pNA, threshold, verbose)
 }
 \value{
 a list containing the estimated ncp and the corresponding criterion values.

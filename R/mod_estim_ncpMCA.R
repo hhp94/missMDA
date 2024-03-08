@@ -1,29 +1,71 @@
-#' Insert NA into data.frame
-#'
-#' @description
-#' Randomly introduces missing values (NA) into a given data.frame
-#'
-#' @details
-#' This function creates a matrix of logical values (NAloc) with the same dimensions as the input data.frame.
-#' For each column in the data.frame, it randomly selects a subset of row indices where the corresponding element is not an empty string.
-#' The selected indices are used to assign TRUE values in the corresponding positions of the NAloc matrix.
-#' The input data.frame is then updated by setting the elements corresponding to the TRUE values in NAloc as missing (NA).
-#' The modified data.frame with missing values is returned.
-#'
-#' @param x The input data.frame
-#' @param noNA The proportion of missing values to introduce, as a numeric value between 0 and 1.
-#'
-#' @return The input data.frame with randomly introduced missing values
 prodna1 <- function(x, noNA) {
   n <- nrow(x)
   p <- ncol(x)
-  NAloc <- matrix(FALSE, nrow = n, ncol = p)
-  for (j in seq_len(p)) {
-    na_indices <- sample(seq_len(n)[x[, j] != ""], floor(n * noNA))
-    NAloc[na_indices, j] <- TRUE
-  }
-  x[NAloc] <- NA
+  NAloc <- rep(FALSE, n * p)
+  n_miss <- floor(n * p * noNA)
+  stopifnot("Increase pNA st floor(n * p * noNA) > 0" = n_miss > 0)
+  NAloc[sample(n * p, n_miss)] <- TRUE
+  x[matrix(NAloc, nrow = n, ncol = p)] <- NA
   return(x)
+}
+
+generate_k_fold <- function(don, pNA, max_iterations = 50) {
+  stopifnot(0 < pNA, pNA < 1)
+  compteur <- 1
+  # Calculate the levels of each column before amputation
+  levels_before <- sum(sapply(don, nlevels))
+
+  while (compteur <= max_iterations) {
+    donNA <- prodna1(don, pNA) # Amputate the data
+    donNA <- droplevels(donNA) # Drop unused level
+    # If we drop a level of any column by prodna, levels_after will be less than
+    # levels_before
+    levels_after <- sum(sapply(donNA, nlevels))
+
+    if (levels_before == levels_after) {
+      return(donNA)
+    }
+
+    compteur <- compteur + 1
+  }
+
+  stop(
+    paste(
+      "It is too difficult to suppress some cells.",
+      "Maybe several categories are taken by only 1 individual.",
+      "You should suppress these variables, try method.cv='loo', or lower pNA.",
+      sep = "\n"
+    )
+  )
+}
+
+MCA_kfold_crit <- function(nbaxes, vrai.tab, const, don, donNA, threshold) {
+  tab.disj.comp <- modded_imputeMCA(
+    donNA,
+    ncp = nbaxes, threshold = threshold
+  )$tab.disj
+  crit <- sum((tab.disj.comp - vrai.tab)^2, na.rm = TRUE) / const
+  return(crit)
+}
+
+MCA_kfold_sim <- function(
+    sim, vrai.tab, n_NA_init, don, pNA, ncp.min, ncp.max, threshold, pb, nbsim, verbose) {
+  donNA <- generate_k_fold(don = don, pNA = pNA)
+  const <- (sum(is.na(FactoMineR::tab.disjonctif(donNA))) - n_NA_init)
+  res <- sapply(
+    ncp.min:ncp.max,
+    \(ncp) {
+      MCA_kfold_crit(
+        ncp,
+        vrai.tab = vrai.tab, const = const, don = don, donNA = donNA, threshold = threshold
+      )
+    }
+  )
+
+  if (verbose) {
+    setTxtProgressBar(pb, sim / nbsim * 100)
+  }
+  return(res)
 }
 
 #' Perform `modded_estim_ncpMCA` with K-fold CV
@@ -43,28 +85,32 @@ prodna1 <- function(x, noNA) {
 #'
 #' @return a list containing the estimated ncp and the corresponding criterion values.
 estim_ncpMCA_kfold <- function(don, ncp.min, ncp.max, nbsim, pNA, threshold, verbose) {
+  stopifnot(
+    "ncp.min should be integer" = ncp.min == as.integer(ncp.min),
+    "ncp.max should be integer" = ncp.max == as.integer(ncp.max),
+    "ncp.max should be >= ncp.min" = ncp.max >= ncp.min
+  )
   vrai.tab <- tab.disjonctif(don)
-  res <- matrix(NA, ncp.max - ncp.min + 1, nbsim)
-  if (verbose) { 
+  n_NA_init <- sum(is.na(vrai.tab))
+
+  if (verbose) {
     pb <- txtProgressBar(min = 1 / nbsim * 100, max = 100, style = 3)
   }
 
-  for (sim in seq_len(nbsim)) {
-    donNA <- prodna1(don, pNA)
-    for (i in seq_len(ncol(don))) {
-      donNA[, i] <- as.factor(as.character(donNA[, i]))
-    }
-    
-    for (nbaxes in ncp.min:ncp.max) {
-      tab.disj.comp <- imputeMCA(donNA, ncp = nbaxes, threshold = threshold)$tab.disj
-      res[nbaxes - ncp.min + 1, sim] <- sum((tab.disj.comp - vrai.tab)^2, na.rm = TRUE) / (sum(is.na(tab.disjonctif(donNA))) - sum(is.na(tab.disjonctif(don))))
-    }
-    
-    if (verbose) { 
-      setTxtProgressBar(pb, sim / nbsim * 100) 
-    }
-  }
-  if (verbose) { 
+  res <- vapply(
+    seq_len(nbsim),
+    function(x) {
+      MCA_kfold_sim(
+        sim = x,
+        vrai.tab = vrai.tab, n_NA_init = n_NA_init, don = don, pNA = pNA,
+        ncp.min = ncp.min, ncp.max = ncp.max, threshold = threshold, pb = pb,
+        nbsim = nbsim, verbose = verbose
+      )
+    },
+    FUN.VALUE = numeric(length(ncp.min:ncp.max))
+  )
+
+  if (verbose) {
     close(pb)
   }
 
@@ -73,41 +119,6 @@ estim_ncpMCA_kfold <- function(don, ncp.min, ncp.max, nbsim, pNA, threshold, ver
   result <- list(ncp = as.integer(which.min(crit) + ncp.min - 1), criterion = crit)
   return(result)
 }
-
-# Sequential over both
-# for (sim in seq_len(nbsim)) {
-#   donNA <- prodna1(don, pNA)
-#   for (i in seq_len(ncol(don))) {
-#     donNA[, i] <- as.factor(as.character(donNA[, i]))
-#   }
-#   
-#   for (nbaxes in ncp.min:ncp.max) {
-#     tab.disj.comp <- imputeMCA(donNA, ncp = nbaxes, threshold = threshold)$tab.disj
-#     res[nbaxes - ncp.min + 1, sim] <- sum((tab.disj.comp - vrai.tab)^2, na.rm = TRUE) / (sum(is.na(tab.disjonctif(donNA))) - sum(is.na(tab.disjonctif(don))))
-#   }
-#   
-#   if (verbose) { 
-#     setTxtProgressBar(pb, sim / nbsim * 100) 
-#   }
-# }
-
-# Parallel over chunks of nbsim
-
-# Parallel over the ncp
-# res[, sim] <- future.apply::future_sapply(
-#   ncp.min:ncp.max,
-#   function(nbaxes) {
-#     tab.disj.comp <- modded_imputeMCA(donNA, ncp = nbaxes, threshold = threshold)$tab.disj
-#     crit <- sum((tab.disj.comp - vrai.tab) ^ 2, na.rm = TRUE) /
-#       (sum(is.na(tab.disjonctif(donNA))) - sum(is.na(tab.disjonctif(don))))
-#     return(crit)
-#   },
-#   USE.NAMES = FALSE,
-#   future.packages = c("FactoMineR"),
-#   future.seed = TRUE
-# )
-
-
 
 #' Perform `modded_estim_ncpMCA` with LOO-CV
 #'

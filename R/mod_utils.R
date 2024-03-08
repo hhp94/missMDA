@@ -26,9 +26,14 @@ fit_compare_fns <- function(df, ...) {
   test_args <- args
   test_args[["svd_fns"]] <- NULL
   test <- do.call("imputeMCA", args = test_args)$completeObs
-  
+
   modded_test_args <- args
   modded_test_args[["row.w"]] <- NULL
   modded_test <- do.call("modded_imputeMCA", args = modded_test_args)$completeObs
   return(list(test = test, modded_test = modded_test))
+}
+
+# From dplyr
+near <- function (x, y, tol = .Machine$double.eps^0.5) {
+  abs(x - y) < tol
 }

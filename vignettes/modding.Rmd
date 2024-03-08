@@ -279,9 +279,10 @@ microbenchmark::microbenchmark(
 # mod estim_ncpMCA
 replace `imputeMCA` with `modded_imputeMCA` and also add the parallel over ncp
 ```{r}
-
+debug(generate_k_fold)
+generate_k_fold(vnf0, 0.99, max_iterations = 1)
+undebug(generate_k_fold)
 ```
-
 
 ```{r}
 debug(estim_ncpMCA_kfold)
@@ -295,6 +296,28 @@ estim_ncpMCA_kfold(
   verbose = TRUE
 )
 undebug(estim_ncpMCA_kfold)
+```
+
+## benchmark
+```{r}
+estim_args <- list(
+  don = vnf0,
+  ncp.min = 2,
+  ncp.max = 4,
+  nbsim = 25,
+  pNA = 0.05,
+  threshold = 1e-4,
+  verbose = TRUE
+)
+library(tictoc)
+tic()
+do.call("estim_ncpMCA", estim_args)
+toc()
+
+tic()
+do.call("estim_ncpMCA_kfold", estim_args)
+toc()
+
 ```
 
 

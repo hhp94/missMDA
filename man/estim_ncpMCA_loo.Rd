@@ -4,7 +4,7 @@
 \alias{estim_ncpMCA_loo}
 \title{Perform `modded_estim_ncpMCA` with LOO-CV}
 \usage{
-estim_ncpMCA_loo(don, vrai.tab, ncp.min, ncp.max, threshold, verbose)
+estim_ncpMCA_loo(don, ncp.min, ncp.max, threshold, verbose)
 }
 \value{
 a list containing the estimated ncp and the corresponding criterion values.
