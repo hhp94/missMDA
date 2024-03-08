@@ -11,7 +11,7 @@ validate_MCA <- function(don) {
 
 get_data_clean <- function(name) {
   e <- new.env()
-  data(list = name, envir = e)
+  utils::data(list = name, envir = e)
   return(get(name, envir = e))
 }
 

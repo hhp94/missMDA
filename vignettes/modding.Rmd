@@ -317,7 +317,6 @@ toc()
 tic()
 do.call("estim_ncpMCA_kfold", estim_args)
 toc()
-
 ```
 
 

@@ -39,12 +39,12 @@ generate_k_fold <- function(don, pNA, max_iterations = 50) {
   )
 }
 
-MCA_kfold_crit <- function(nbaxes, vrai.tab, const, don, donNA, threshold) {
+MCA_kfold_crit <- function(nbaxes, vrai.tab, don, donNA, threshold) {
   tab.disj.comp <- modded_imputeMCA(
     donNA,
     ncp = nbaxes, threshold = threshold
   )$tab.disj
-  crit <- sum((tab.disj.comp - vrai.tab)^2, na.rm = TRUE) / const
+  crit <- sum((tab.disj.comp - vrai.tab)^2, na.rm = TRUE)
   return(crit)
 }
 
@@ -57,11 +57,11 @@ MCA_kfold_sim <- function(
     \(ncp) {
       MCA_kfold_crit(
         ncp,
-        vrai.tab = vrai.tab, const = const, don = don, donNA = donNA, threshold = threshold
+        vrai.tab = vrai.tab, don = don, donNA = donNA, threshold = threshold
       )
     }
   )
-
+  res <- res/const
   if (verbose) {
     setTxtProgressBar(pb, sim / nbsim * 100)
   }
