@@ -276,7 +276,27 @@ microbenchmark::microbenchmark(
 )
 ```
 
-### mode estim_ncpMCA
+# mod estim_ncpMCA
+replace `imputeMCA` with `modded_imputeMCA` and also add the parallel over ncp
+```{r}
+
+```
+
+
+```{r}
+debug(estim_ncpMCA_kfold)
+estim_ncpMCA_kfold(
+  vnf0,
+  ncp.min = 2,
+  ncp.max = 4,
+  nbsim = 25,
+  pNA = 0.05,
+  threshold = 1e-4,
+  verbose = TRUE
+)
+undebug(estim_ncpMCA_kfold)
+```
+
 
 ### debug
 ```{r}

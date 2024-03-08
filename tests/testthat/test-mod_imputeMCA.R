@@ -22,15 +22,17 @@ test_that("test different modded_imputeMCA svd functions tall", {
   vnf <- get_data_clean("vnf")
   vnf0 <- vnf[-c(841,1073), ]
 
-  # Tall
-  expect_equal(
-    imputeMCA(vnf0, ncp = 2)$completeObs, 
-    modded_imputeMCA(vnf0, ncp = 2, svd_fns = "svd")$completeObs
-  )
-  expect_equal(
-    modded_imputeMCA(vnf0, ncp = 2, svd_fns = "svd")$completeObs, 
-    modded_imputeMCA(vnf0, ncp = 2, svd_fns = "bootSVD")$completeObs
-  )
+  for(i in seq_len(3)) {
+    # Tall
+    expect_equal(
+      imputeMCA(vnf0, ncp = i)$completeObs, 
+      modded_imputeMCA(vnf0, ncp = i, svd_fns = "svd")$completeObs
+    )
+    expect_equal(
+      modded_imputeMCA(vnf0, ncp = i, svd_fns = "svd")$completeObs, 
+      modded_imputeMCA(vnf0, ncp = i, svd_fns = "bootSVD")$completeObs
+    )
+  }
 })
 
 test_that("test different modded_imputeMCA svd functions wide", {

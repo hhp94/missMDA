@@ -23,14 +23,14 @@ perform_svd <- function(X, svd_fns, ncp) {
       svd.usuelle <- vector(mode = "list", length = 3)
       svd.usuelle$d[svd.usuelle$d < 0] <- 0
       svd.usuelle$d <- sqrt(svd.usuelle$d)
-      svd.usuelle$v <- bb$vec[, 1:ncp]
-      svd.usuelle$u <- t(t(crossprod(t(X), svd.usuelle$v)) / svd.usuelle$d[1:ncp])
+      svd.usuelle$v <- bb$vec[, seq_len(ncp)]
+      svd.usuelle$u <- t(t(crossprod(t(X), svd.usuelle$v)) / svd.usuelle$d[seq_len(ncp)])
     }
   }
   return(svd.usuelle)
 }
 
-mod_svd <- function(X, row.w = NULL, svd_fns = NULL, ncp = Inf) {
+modded_svd.triplet <- function(X, row.w = NULL, svd_fns = NULL, ncp = Inf) {
   if (is.null(row.w)) row.w <- rep(1 / nrow(X), nrow(X))
   ncp <- min(ncp, nrow(X) - 1, ncol(X))
   row.w <- row.w / sum(row.w)
@@ -41,12 +41,10 @@ mod_svd <- function(X, row.w = NULL, svd_fns = NULL, ncp = Inf) {
     U <- svd.usuelle$u
     V <- svd.usuelle$v
 
-    if (ncp > 1) {
-      mult <- sign(as.vector(crossprod(rep(1, nrow(V)), as.matrix(V))))
-      mult[mult == 0] <- 1
-      U <- t(t(U) * mult)
-      V <- t(t(V) * mult)
-    }
+    mult <- sign(as.vector(crossprod(rep(1, nrow(V)), as.matrix(V))))
+    mult[mult == 0] <- 1
+    V <- t(t(V) * mult)
+    U <- t(t(U) * mult)
 
     U <- U / sqrt(row.w)
   } else {
@@ -60,8 +58,8 @@ mod_svd <- function(X, row.w = NULL, svd_fns = NULL, ncp = Inf) {
     U <- t(t(U) * mult) / sqrt(row.w)
   }
 
-  vs <- svd.usuelle$d[1:min(ncol(X), nrow(X) - 1)]
-  num <- which(vs[1:ncp] < 1e-15)
+  vs <- svd.usuelle$d[seq_len(min(ncol(X), nrow(X) - 1))]
+  num <- which(vs[seq_len(ncp)] < 1e-15)
 
   if (length(num) == 1) {
     U[, num] <- U[, num, drop = FALSE] * vs[num]

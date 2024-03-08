@@ -18,8 +18,8 @@ prodna1 <- function(x, noNA) {
   n <- nrow(x)
   p <- ncol(x)
   NAloc <- matrix(FALSE, nrow = n, ncol = p)
-  for (j in 1:p) {
-    na_indices <- sample((1:n)[x[, j] != ""], floor(n * noNA))
+  for (j in seq_len(p)) {
+    na_indices <- sample(seq_len(n)[x[, j] != ""], floor(n * noNA))
     NAloc[na_indices, j] <- TRUE
   }
   x[NAloc] <- NA
@@ -42,28 +42,72 @@ prodna1 <- function(x, noNA) {
 #' @inheritParams modded_estim_ncpMCA
 #'
 #' @return a list containing the estimated ncp and the corresponding criterion values.
-estim_ncpMCA_kfold <- function(don, vrai.tab, ncp.min, ncp.max,
-                               nbsim, pNA, threshold, verbose) {
+estim_ncpMCA_kfold <- function(don, ncp.min, ncp.max, nbsim, pNA, threshold, verbose) {
+  vrai.tab <- tab.disjonctif(don)
   res <- matrix(NA, ncp.max - ncp.min + 1, nbsim)
-  if (verbose) pb <- txtProgressBar(min = 1 / nbsim * 100, max = 100, style = 3)
+  if (verbose) { 
+    pb <- txtProgressBar(min = 1 / nbsim * 100, max = 100, style = 3)
+  }
 
-  for (sim in 1:nbsim) {
+  for (sim in seq_len(nbsim)) {
     donNA <- prodna1(don, pNA)
-    for (i in 1:ncol(don)) donNA[, i] <- as.factor(as.character(donNA[, i]))
-
+    for (i in seq_len(ncol(don))) {
+      donNA[, i] <- as.factor(as.character(donNA[, i]))
+    }
+    
     for (nbaxes in ncp.min:ncp.max) {
       tab.disj.comp <- imputeMCA(donNA, ncp = nbaxes, threshold = threshold)$tab.disj
       res[nbaxes - ncp.min + 1, sim] <- sum((tab.disj.comp - vrai.tab)^2, na.rm = TRUE) / (sum(is.na(tab.disjonctif(donNA))) - sum(is.na(tab.disjonctif(don))))
     }
-    if (verbose) setTxtProgressBar(pb, sim / nbsim * 100)
+    
+    if (verbose) { 
+      setTxtProgressBar(pb, sim / nbsim * 100) 
+    }
   }
-  if (verbose) close(pb)
+  if (verbose) { 
+    close(pb)
+  }
 
   crit <- apply(res, 1, mean, na.rm = TRUE)
   names(crit) <- c(ncp.min:ncp.max)
   result <- list(ncp = as.integer(which.min(crit) + ncp.min - 1), criterion = crit)
   return(result)
 }
+
+# Sequential over both
+# for (sim in seq_len(nbsim)) {
+#   donNA <- prodna1(don, pNA)
+#   for (i in seq_len(ncol(don))) {
+#     donNA[, i] <- as.factor(as.character(donNA[, i]))
+#   }
+#   
+#   for (nbaxes in ncp.min:ncp.max) {
+#     tab.disj.comp <- imputeMCA(donNA, ncp = nbaxes, threshold = threshold)$tab.disj
+#     res[nbaxes - ncp.min + 1, sim] <- sum((tab.disj.comp - vrai.tab)^2, na.rm = TRUE) / (sum(is.na(tab.disjonctif(donNA))) - sum(is.na(tab.disjonctif(don))))
+#   }
+#   
+#   if (verbose) { 
+#     setTxtProgressBar(pb, sim / nbsim * 100) 
+#   }
+# }
+
+# Parallel over chunks of nbsim
+
+# Parallel over the ncp
+# res[, sim] <- future.apply::future_sapply(
+#   ncp.min:ncp.max,
+#   function(nbaxes) {
+#     tab.disj.comp <- modded_imputeMCA(donNA, ncp = nbaxes, threshold = threshold)$tab.disj
+#     crit <- sum((tab.disj.comp - vrai.tab) ^ 2, na.rm = TRUE) /
+#       (sum(is.na(tab.disjonctif(donNA))) - sum(is.na(tab.disjonctif(don))))
+#     return(crit)
+#   },
+#   USE.NAMES = FALSE,
+#   future.packages = c("FactoMineR"),
+#   future.seed = TRUE
+# )
+
+
 
 #' Perform `modded_estim_ncpMCA` with LOO-CV
 #'
@@ -81,9 +125,8 @@ estim_ncpMCA_kfold <- function(don, vrai.tab, ncp.min, ncp.max,
 #' @inheritParams modded_estim_ncpMCA
 #'
 #' @return a list containing the estimated ncp and the corresponding criterion values.
-estim_ncpMCA_loo <- function(
-    don, vrai.tab, ncp.min, ncp.max,
-    threshold, verbose) {
+estim_ncpMCA_loo <- function(don, ncp.min, ncp.max, threshold, verbose) {
+  vrai.tab <- tab.disjonctif(don)
   if (verbose) pb <- txtProgressBar(min = 0, max = 100, style = 3)
   crit <- NULL
   tab.disj.hat <- vrai.tab
@@ -91,13 +134,13 @@ estim_ncpMCA_loo <- function(
 
   for (nbaxes in ncp.min:ncp.max) {
     for (i in 1:nrow(don)) {
-      for (j in 1:ncol(don)) {
+      for (j in seq_len(ncol(don))) {
         if (!is.na(don[i, j])) {
           donNA <- as.matrix(don)
           donNA[i, j] <- NA
           if (!any(unlist(sapply(donNA, summary)) == 0)) {
             for (k in 1:ncol(donNA)) donNA[, k] <- as.factor(as.character(donNA[, k]))
-            tab.disj.hat[i, (cumsum(col.in.indicator)[j] + 1):(cumsum(col.in.indicator)[j + 1])] <- imputeMCA(donNA, ncp = nbaxes, threshold = threshold)$tab.disj[i, (cumsum(col.in.indicator)[j] + 1):(cumsum(col.in.indicator)[j + 1])]
+            tab.disj.hat[i, (cumsum(col.in.indicator)[j] + 1):(cumsum(col.in.indicator)[j + 1])] <- modded_imputeMCA(donNA, ncp = nbaxes, threshold = threshold)$tab.disj[i, (cumsum(col.in.indicator)[j] + 1):(cumsum(col.in.indicator)[j + 1])]
           }
         }
       }
@@ -141,13 +184,12 @@ modded_estim_ncpMCA <- function(don, ncp.min = 0, ncp.max = 5,
   method.cv <- tolower(method.cv)
 
   validate_MCA(don)
-  vrai.tab <- tab.disjonctif(don)
 
   if (method.cv == "kfold") {
-    return(estim_ncpMCA_kfold(don, vrai.tab, ncp.min, ncp.max, nbsim, pNA, threshold, verbose))
+    return(estim_ncpMCA_kfold(don, ncp.min, ncp.max, nbsim, pNA, threshold, verbose))
   }
 
   if (method.cv == "loo") {
-    return(estim_ncpMCA_loo(don, vrai.tab, ncp.min, ncp.max, threshold, verbose))
+    return(estim_ncpMCA_loo(don, ncp.min, ncp.max, threshold, verbose))
   }
 }
