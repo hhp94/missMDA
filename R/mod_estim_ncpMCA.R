@@ -49,7 +49,7 @@ MCA_kfold_crit <- function(nbaxes, vrai.tab, don, donNA, threshold) {
 }
 
 MCA_kfold_sim <- function(
-    sim, vrai.tab, n_NA_init, don, pNA, ncp.min, ncp.max, threshold, pb, nbsim, verbose) {
+    sim, vrai.tab, n_NA_init, don, pNA, ncp.min, ncp.max, threshold, pb, verbose) {
   donNA <- generate_k_fold(don = don, pNA = pNA)
   const <- (sum(is.na(FactoMineR::tab.disjonctif(donNA))) - n_NA_init)
   res <- sapply(
@@ -62,9 +62,7 @@ MCA_kfold_sim <- function(
     }
   )
   res <- res/const
-  if (verbose) {
-    setTxtProgressBar(pb, sim / nbsim * 100)
-  }
+  if (verbose) { pb() }
   return(res)
 }
 
@@ -86,34 +84,35 @@ MCA_kfold_sim <- function(
 #' @return a list containing the estimated ncp and the corresponding criterion values.
 estim_ncpMCA_kfold <- function(don, ncp.min, ncp.max, nbsim, pNA, threshold, verbose) {
   stopifnot(
-    "ncp.min should be integer" = ncp.min == as.integer(ncp.min),
-    "ncp.max should be integer" = ncp.max == as.integer(ncp.max),
-    "ncp.max should be >= ncp.min" = ncp.max >= ncp.min
+    "nbsim should be integer" = nbsim == as.integer(nbsim),
+    "nbsim should be > 0" = nbsim > 0
   )
   vrai.tab <- tab.disjonctif(don)
   n_NA_init <- sum(is.na(vrai.tab))
-
+  sim_index <- seq_len(nbsim)
+  
   if (verbose) {
-    pb <- txtProgressBar(min = 1 / nbsim * 100, max = 100, style = 3)
+    message("Tuning ncp, `library(progressr); handlers(global = TRUE)` to track progress")
+    pb <- progressr::progressor(along = sim_index)
+  } else {
+    pb <- NULL
   }
 
+  # res <- future.apply::future_vapply(
   res <- vapply(
-    seq_len(nbsim),
+    sim_index,
     function(x) {
       MCA_kfold_sim(
         sim = x,
         vrai.tab = vrai.tab, n_NA_init = n_NA_init, don = don, pNA = pNA,
         ncp.min = ncp.min, ncp.max = ncp.max, threshold = threshold, pb = pb,
-        nbsim = nbsim, verbose = verbose
+        verbose = verbose
       )
     },
+    # future.seed = TRUE,
     FUN.VALUE = numeric(length(ncp.min:ncp.max))
   )
-
-  if (verbose) {
-    close(pb)
-  }
-
+  
   crit <- apply(res, 1, mean, na.rm = TRUE)
   names(crit) <- c(ncp.min:ncp.max)
   result <- list(ncp = as.integer(which.min(crit) + ncp.min - 1), criterion = crit)
@@ -193,6 +192,12 @@ modded_estim_ncpMCA <- function(don, ncp.min = 0, ncp.max = 5,
                                 threshold = 1e-4, verbose = TRUE) {
   method.cv <- match.arg(method.cv, c("loo", "Kfold", "kfold", "LOO"), several.ok = T)[1]
   method.cv <- tolower(method.cv)
+  stopifnot(  
+    "ncp.min should be integer" = ncp.min == as.integer(ncp.min),
+    "ncp.max should be integer" = ncp.max == as.integer(ncp.max),
+    "ncp.max should be >= ncp.min" = ncp.max >= ncp.min,
+    is.logical(verbose), length(verbose) == 1
+  )
 
   validate_MCA(don)
 

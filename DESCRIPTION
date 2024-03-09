@@ -20,7 +20,9 @@ Imports:
     foreach,
     corpcor,
     matrixStats,
-    bootSVD
+    bootSVD,
+    progressr,
+    future.apply
 Suggests: 
     knitr,
     markdown,

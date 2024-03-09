@@ -279,6 +279,12 @@ microbenchmark::microbenchmark(
 # mod estim_ncpMCA
 replace `imputeMCA` with `modded_imputeMCA` and also add the parallel over ncp
 ```{r}
+library(progressr)
+handlers(global = TRUE)
+```
+
+```{r}
+prodna1(vnf0, 0.05)
 debug(generate_k_fold)
 generate_k_fold(vnf0, 0.99, max_iterations = 1)
 undebug(generate_k_fold)
