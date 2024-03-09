@@ -28,10 +28,10 @@ test_that("prodna1 and generate_k_fold", {
   vnf <- get_data_clean("vnf")
   vnf0 <- vnf[-c(841, 1073),]
   set.seed(1234)
-  expect_error(prodna1(vnf0, 0), regex = "Increase")
-  expect_error(prodna1(vnf0, 0.00000001), regex = "Increase")
+  expect_error(prodna1(100, 100, 0), regex = "Increase")
+  expect_error(prodna1(100, 100, 0.00000001), regex = "Increase")
 
   set.seed(1234)
-  expect_error(generate_k_fold(vnf0, pNA = 1))
-  expect_error(generate_k_fold(vnf0, pNA = 0.99, max_iterations = 1))
+  expect_error(generate_k_fold(vnf0, nrow(vnf0), ncol(vnf0), pNA = 1))
+  expect_error(generate_k_fold(vnf0, nrow(vnf0), ncol(vnf0), pNA = 0.99, max_iterations = 1))
 })

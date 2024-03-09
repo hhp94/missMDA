@@ -28,12 +28,12 @@ modded_estim_ncpMCA(
 
 \item{pNA:}{The proportion of missing values to introduce in each simulation (default = 0.05).}
 
-\item{threshold:}{The threshold value for convergence in the imputeMCA function (default = 1e-4).}
+\item{threshold:}{The threshold value for convergence in the `imputeMCA` function (default = 1e-4).}
 
 \item{verbose:}{Logical value indicating whether to display progress information (default = TRUE).}
 }
 \value{
-a list containing the estimated ncp and the corresponding criterion values.
+a list containing the estimated ncp and the corresponding mean criterion values over nbsim.
 }
 \description{
 Estimates the number of dimensions to retain in Multiple Correspondence Analysis
@@ -41,7 +41,6 @@ Estimates the number of dimensions to retain in Multiple Correspondence Analysis
 \details{
 This function estimates the number of dimensions to retain in MCA using the specified cross-validation method.
 It calls either the `estim_ncpMCA_kfold` or `estim_ncpMCA_loo` function based on the method.cv argument.
-This function first validates the input data.frame using the validate_MCA function.
-It computes the true table of the input data.frame using the `tab.disjonctif` function.
+This function first validates the input data.frame using the `validate_MCA` function.
 This function then passes the necessary arguments to the selected cross-validation function and returns the result.
 }

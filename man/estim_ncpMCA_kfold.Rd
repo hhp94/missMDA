@@ -14,7 +14,6 @@ Estimates the number of dimensions to retain in Multiple Correspondence Analysis
 }
 \details{
 This function performs K-fold cross-validation to estimate the number of dimensions to retain in MCA.
-It introduces missing values into the input data.frame using the `prodna1` function.
 For each simulation and each number of dimensions (ncp), it computes the imputed data.frame using the `modded_imputeMCA` function.
 The sum of squared differences between the imputed and true tables is calculated and stored in the res matrix.
 The criterion values are computed by taking the mean of the sum of squared differences across simulations for each ncp.

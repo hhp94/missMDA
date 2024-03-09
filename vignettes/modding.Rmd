@@ -305,24 +305,39 @@ undebug(estim_ncpMCA_kfold)
 ```
 
 ## benchmark
+### single core
+About 1.239 times faster from the rewrites.
 ```{r}
 estim_args <- list(
   don = vnf0,
   ncp.min = 2,
   ncp.max = 4,
-  nbsim = 25,
-  pNA = 0.05,
+  nbsim = 10,
+  pNA = 0.01,
   threshold = 1e-4,
   verbose = TRUE
 )
-library(tictoc)
-tic()
-do.call("estim_ncpMCA", estim_args)
-toc()
 
-tic()
-do.call("estim_ncpMCA_kfold", estim_args)
-toc()
+microbenchmark::microbenchmark(
+  do.call("estim_ncpMCA", estim_args),
+  do.call("modded_estim_ncpMCA", estim_args),
+  times = 3
+)
+```
+
+### multicore
+Get up to X folds faster with parallel
+```{r}
+library(future.apply)
+estim_args2 <- estim_args
+estim_args2$nbsim <- 50
+plan(multisession, workers = 3)
+microbenchmark::microbenchmark(
+  do.call("estim_ncpMCA", estim_args2),
+  do.call("modded_estim_ncpMCA", estim_args2),
+  times = 1
+)
+plan(sequential)
 ```
 
 
