@@ -295,7 +295,7 @@ debug(estim_ncpMCA_kfold)
 estim_ncpMCA_kfold(
   vnf0,
   ncp.min = 2,
-  ncp.max = 4,
+  ncp.max = 2,
   nbsim = 25,
   pNA = 0.05,
   threshold = 1e-4,

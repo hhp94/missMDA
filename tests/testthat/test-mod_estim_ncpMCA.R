@@ -24,6 +24,21 @@ test_that("modded_estim_ncpMCA works", {
   expect_true(all(near(result$criterion, result1$criterion)))
 })
 
+test_that("modded_estim_ncpMCA dot param", {
+  vnf <- get_data_clean("vnf")
+  vnf0 <- vnf[-c(841, 1073), ]
+  set.seed(1234)
+  expect_error(
+    {modded_estim_ncpMCA(
+      vnf0,
+      ncp.min = 2,
+      ncp.max = 4,
+      nbsim = 15,
+      pNA = 0.005,
+      svd_fns = "ERROR"
+    )}, regexp = "bootSVD")
+})
+
 test_that("prodna1 and generate_k_fold", {
   vnf <- get_data_clean("vnf")
   vnf0 <- vnf[-c(841, 1073),]

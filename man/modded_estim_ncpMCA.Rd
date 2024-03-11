@@ -12,7 +12,8 @@ modded_estim_ncpMCA(
   nbsim = 100,
   pNA = 0.05,
   threshold = 1e-04,
-  verbose = TRUE
+  verbose = TRUE,
+  ...
 )
 }
 \arguments{
@@ -31,6 +32,8 @@ modded_estim_ncpMCA(
 \item{threshold:}{The threshold value for convergence in the `imputeMCA` function (default = 1e-4).}
 
 \item{verbose:}{Logical value indicating whether to display progress information (default = TRUE).}
+
+\item{...:}{passed to `modded_imputeMCA`}
 }
 \value{
 a list containing the estimated ncp and the corresponding mean criterion values over nbsim.

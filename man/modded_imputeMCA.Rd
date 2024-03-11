@@ -32,7 +32,7 @@ initially imputed by the proportion of the category for the categorical
 variables coded with indicator matrices of dummy variables. Other values
 leads to a random initialization}
 
-\item{svd_fns}{which svd function to use "bootSVD"(default), "base", or "corpco"}
+\item{svd_fns}{which svd function to use "bootSVD"(default), "corpcor", or "svd"}
 
 \item{maxiter}{integer, maximum number of iterations for the regularized iterative
 MCA algorithm}

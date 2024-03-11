@@ -71,12 +71,9 @@ generate_k_fold <- function(don, n, p, pNA, max_iterations = 50) {
 #' @noRd
 #'
 #' @return unnormalized sum squared difference between truth and imputed values
-MCA_kfold_crit <- function(nbaxes, vrai.tab, donNA, threshold) {
-  tab.disj.comp <- modded_imputeMCA(
-    donNA,
-    ncp = nbaxes, threshold = threshold
-  )$tab.disj
-  crit <- sum((tab.disj.comp - vrai.tab)^2, na.rm = TRUE)
+MCA_kfold_crit <- function(nbaxes, vrai.tab, donNA, threshold, ...) {
+  tab.disj.comp <- modded_imputeMCA(donNA, ncp = nbaxes, threshold = threshold, ...)
+  crit <- sum((tab.disj.comp$tab.disj - vrai.tab)^2, na.rm = TRUE)
   return(crit)
 }
 
@@ -94,11 +91,11 @@ MCA_kfold_crit <- function(nbaxes, vrai.tab, donNA, threshold) {
 #' @noRd
 #'
 #' @return a vector of criterion with length of ncp being tested
-MCA_kfold_sim <- function(donNA, vrai.tab, pNA, ncp.min, ncp.max, threshold, pb, verbose) {
+MCA_kfold_sim <- function(donNA, vrai.tab, pNA, ncp.min, ncp.max, threshold, pb, verbose, ...) {
   res <- sapply(
     ncp.min:ncp.max,
     function(ncp) {
-      MCA_kfold_crit(ncp, vrai.tab = vrai.tab, donNA = donNA, threshold = threshold)
+      MCA_kfold_crit(ncp, vrai.tab = vrai.tab, donNA = donNA, threshold = threshold, ...)
     }
   )
 
@@ -123,7 +120,7 @@ MCA_kfold_sim <- function(donNA, vrai.tab, pNA, ncp.min, ncp.max, threshold, pb,
 #' @inheritParams modded_estim_ncpMCA
 #'
 #' @return a list containing the estimated ncp and the corresponding criterion values.
-estim_ncpMCA_kfold <- function(don, ncp.min, ncp.max, nbsim, pNA, threshold, verbose) {
+estim_ncpMCA_kfold <- function(don, ncp.min, ncp.max, nbsim, pNA, threshold, verbose, ...) {
   stopifnot(
     "nbsim should be integer" = nbsim == as.integer(nbsim),
     "nbsim should be > 0" = nbsim > 0
@@ -154,17 +151,23 @@ estim_ncpMCA_kfold <- function(don, ncp.min, ncp.max, nbsim, pNA, threshold, ver
   # Tune ncp. Run parallel over `nbsim` for minimal overhead.
   res <- future.apply::future_vapply(
     donNA_list,
-    function(x) {
+    function(x, ...) {
       MCA_kfold_sim(
         donNA = x,
         vrai.tab = vrai.tab, pNA = pNA, ncp.min = ncp.min, ncp.max = ncp.max,
-        threshold = threshold, pb = pb, verbose = verbose
+        threshold = threshold, pb = pb, verbose = verbose, ...
       )
     },
+    ...,
     future.seed = TRUE,
-    future.packages = c("FactoMineR", "missMDA"), 
+    future.packages = c("FactoMineR", "missMDA"),
     FUN.VALUE = numeric(length(ncp.min:ncp.max))
   )
+
+  if(length(ncp.min:ncp.max) == 1) {
+    res <- matrix(res, nrow = 1, ncol = nbsim)
+  }
+
   # Normalize by const calculated once above
   res <- t(t(res) / const)
 
@@ -238,12 +241,13 @@ estim_ncpMCA_loo <- function(don, ncp.min, ncp.max, threshold, verbose) {
 #' @param pNA: The proportion of missing values to introduce in each simulation (default = 0.05).
 #' @param threshold: The threshold value for convergence in the `imputeMCA` function (default = 1e-4).
 #' @param verbose: Logical value indicating whether to display progress information (default = TRUE).
+#' @param ...: passed to `modded_imputeMCA`
 #'
 #' @return a list containing the estimated ncp and the corresponding mean criterion values over nbsim.
 #' @export
 modded_estim_ncpMCA <- function(don, ncp.min = 0, ncp.max = 5,
                                 method.cv = c("Kfold", "loo"), nbsim = 100, pNA = 0.05,
-                                threshold = 1e-4, verbose = TRUE) {
+                                threshold = 1e-4, verbose = TRUE, ...) {
   method.cv <- match.arg(method.cv, c("loo", "Kfold", "kfold", "LOO"), several.ok = T)[1]
   method.cv <- tolower(method.cv)
   stopifnot(
@@ -257,7 +261,7 @@ modded_estim_ncpMCA <- function(don, ncp.min = 0, ncp.max = 5,
   validate_MCA(don)
 
   if (method.cv == "kfold") {
-    return(estim_ncpMCA_kfold(don, ncp.min, ncp.max, nbsim, pNA, threshold, verbose))
+    return(estim_ncpMCA_kfold(don, ncp.min, ncp.max, nbsim, pNA, threshold, verbose, ...))
   }
 
   if (method.cv == "loo") {
