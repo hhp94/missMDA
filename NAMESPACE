@@ -1,4 +1,9 @@
 export(estim_ncpFAMD,estim_ncpPCA,estim_ncpMCA,estim_ncpMultilevel,imputeCA,imputeFAMD,imputeMCA,imputeMFA,imputeMultilevel,imputePCA,MIMCA,MIFAMD,MIPCA,Overimpute,prelim,plot.MIPCA,plot.MIMCA)
+export(methyl_estim_ncpPCA)
+export(methyl_imputePCA)
+export(modded_estim_ncpMCA)
+export(modded_imputeMCA)
+
 import(doParallel)
 import(foreach)
 import(parallel)
