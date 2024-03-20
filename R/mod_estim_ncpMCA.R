@@ -28,7 +28,7 @@ prodna1 <- function(n, p, pNA) {
 #' @noRd
 #'
 #' @return a valid vector of position to assign NA
-generate_k_fold <- function(don, n, p, pNA, max_iterations = 50) {
+generate_k_fold <- function(don, n, p, pNA, max_iterations = 100) {
   stopifnot(0 < pNA, pNA < 1)
   compteur <- 1
   # Calculate the levels of each column before amputation
@@ -43,7 +43,10 @@ generate_k_fold <- function(don, n, p, pNA, max_iterations = 50) {
     # levels_before
     levels_after <- sum(sapply(donNA, nlevels))
 
-    if (levels_before == levels_after) {
+    # If we completely drop a row. no_rows_dropped would be FALSE
+    no_rows_dropped <- all(rowSums(is.na(donNA)) < ncol(donNA))
+
+    if ((levels_before == levels_after) && no_rows_dropped) {
       return(donNA)
     }
 
@@ -54,7 +57,8 @@ generate_k_fold <- function(don, n, p, pNA, max_iterations = 50) {
     paste(
       "It is too difficult to suppress some cells.",
       "Maybe several categories are taken by only 1 individual.",
-      "You should suppress these variables, try method.cv='loo', or lower pNA.",
+      "Maybe many rows have too many missing values.",
+      "You should suppress these variables, try method.cv='loo', or lower `pNA`.",
       sep = "\n"
     )
   )

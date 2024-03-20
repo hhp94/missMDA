@@ -28,10 +28,8 @@ modded_imputeMCA <-
            seed = NULL,
            svd_fns = c("bootSVD", "corpcor", "svd"),
            maxiter = 1000) {
-
     svd_fns <- match.arg(svd_fns)
-    svd_fns <- switch(
-      svd_fns,
+    svd_fns <- switch(svd_fns,
       bootSVD = bootSVD_wrap,
       corpcor = corpcor_wrap,
       svd = svd,
@@ -56,9 +54,17 @@ modded_imputeMCA <-
     # Convert to dummy matrix and get the coordinate of the missing values
     tab.disj.NA <- tab.disjonctif(don)
     tab.disj.comp <- tab.disjonctif.prop(don, seed, row.w = row.w)
-    stopifnot("tab.disjonctif.prop should not return any NA"=!anyNA(tab.disj.comp))
+    stopifnot("tab.disjonctif.prop should not return any NA" = !anyNA(tab.disj.comp))
     # Repeatedly calculated values
     ncol_tab <- ncol(tab.disj.comp)
+
+    # Cannot have too many ncp for regularization to work
+    k_j <- ncol_tab - ncol_don
+    regularize <- TRUE
+    if (ncp >= k_j) {
+      regularize <- FALSE
+    }
+
     ncp_vec <- seq_len(ncp)
 
     # Initialize
@@ -70,11 +76,11 @@ modded_imputeMCA <-
 
     while (continue) {
       nbiter <- nbiter + 1
-      stopifnot("maxiter reached"=nbiter <= maxiter)
+      stopifnot("maxiter reached" = nbiter <= maxiter)
       # weights are always > 0, ncol_don always > 0. So if value is smaller than
       # zero then it's not because of ncol_don
 
-      sum_weighted <- colSums(tab.disj.comp*row.w[1])
+      sum_weighted <- colSums(tab.disj.comp * row.w[1])
       M <- sum_weighted / ncol_don
       if (any(M < 0)) {
         stop(
@@ -89,21 +95,26 @@ modded_imputeMCA <-
       }
 
       Z <- t(t(tab.disj.comp) / sum_weighted)
-      Z <- t(t(Z) - colSums(Z*row.w[1]))
+      Z <- t(t(Z) - colSums(Z * row.w[1]))
       Zscale <- t(t(Z) * sqrt(M))
 
       # Run svd based on the Zscale matrix
       # svd.Zscale <- FactoMineR::svd.triplet(Zscale, row.w = row.w, ncp = ncp)
       svd.Zscale <- modded_svd.triplet(Zscale, row.w = row.w, ncp = ncp, svd_fns = svd_fns)
-      moyeig <- 0
 
-      # Regularizing
-      if (nrow(don) > (ncol_tab - ncol_don)) {
-        moyeig <- mean(svd.Zscale$vs[-c(ncp_vec, (ncol_tab - ncol_don + 1):ncol_tab)] ^ 2)
+      # Regularization is meaningless if ncp is too high. In which case moyeig to zero
+      if (regularize == FALSE) {
+        moyeig <- 0
       } else {
-        moyeig <- mean(svd.Zscale$vs[-c(ncp_vec, ncol_tab:length(svd.Zscale$vs))]^2)
+        # Regularizing
+        if (nrow(don) > (k_j)) {
+          moyeig <- mean(svd.Zscale$vs[-c(ncp_vec, (k_j + 1):ncol_tab)]^2)
+        } else {
+          moyeig <-
+            mean(svd.Zscale$vs[-c(ncp_vec, ncol_tab:length(svd.Zscale$vs))]^2)
+        }
+        moyeig <- min(moyeig * coeff.ridge, svd.Zscale$vs[ncp + 1]^2)
       }
-      moyeig <- min(moyeig * coeff.ridge, svd.Zscale$vs[ncp + 1]^2)
       eig.shrunk <- ((svd.Zscale$vs[ncp_vec]^2 - moyeig) / svd.Zscale$vs[ncp_vec])
       rec <- tcrossprod(
         t(t(svd.Zscale$U[, ncp_vec, drop = FALSE]) * eig.shrunk),
@@ -115,7 +126,7 @@ modded_imputeMCA <-
 
       diff <- tab.disj.rec - tab.disj.rec.old
       diff[hidden] <- 0
-      relch <- sum(diff^2*row.w)
+      relch <- sum(diff^2 * row.w)
       tab.disj.rec.old <- tab.disj.rec
       tab.disj.comp[hidden] <- tab.disj.rec[hidden]
       continue <- (relch > threshold) && (nbiter < maxiter)
