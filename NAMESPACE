@@ -3,6 +3,7 @@ export(methyl_estim_ncpPCA)
 export(methyl_imputePCA)
 export(modded_estim_ncpMCA)
 export(modded_imputeMCA)
+export(modded_MIMCA)
 
 import(doParallel)
 import(foreach)

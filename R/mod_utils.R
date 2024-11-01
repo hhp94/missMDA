@@ -1,12 +1,16 @@
 validate_MCA <- function(don) {
-  stopifnot(is.data.frame(don), all(!c("tbl_df", "tbl") %in% class(don)))
-  don_class <- unique(lapply(don, class))
-  stopifnot(length(don_class) == 1, don_class[[1]] == "factor")
+  stopifnot("X must be a data.frame"=is.data.frame(don) && all(!c("tbl_df", "tbl") %in% class(don)))
+  don <- droplevels(don)
+  pass_class <- vapply(lapply(don, class), \(x) {"factor" %in% x | "ordered" %in% x}, logical(1))
+  stopifnot("Only factors are allowed in X"=all(pass_class))
   miss_matrix <- is.na(don)
+  stopifnot("X must have more than 1 rows and cols"=ncol(don) > 1 && nrow(don) > 1)
   stopifnot(
     "All missing column(s) detected" = all(colSums(miss_matrix) < nrow(miss_matrix)),
     "All missing row(s) detected" = all(rowSums(miss_matrix) < ncol(miss_matrix))
   )
+  single_level_cols <- vapply(don, \(x) { length(levels(x)) == 1 }, logical(1))
+  stopifnot("Factors with only 1 level detected"=sum(single_level_cols) == 0)
 }
 
 get_data_clean <- function(name) {

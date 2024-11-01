@@ -22,7 +22,8 @@ Imports:
     matrixStats,
     bootSVD,
     progressr,
-    future.apply
+    future.apply,
+    future
 Suggests: 
     knitr,
     markdown,
@@ -37,5 +38,5 @@ Packaged: 2023-11-17 06:53:54 UTC; husson
 Repository: CRAN
 Date/Publication: 2023-11-17 10:20:19 UTC
 Config/testthat/edition: 3
-RoxygenNote: 7.3.1
+RoxygenNote: 7.3.2
 LazyData: true

@@ -26,6 +26,7 @@ modded_imputeMCA <-
            coeff.ridge = 1,
            threshold = 1e-6,
            seed = NULL,
+           row.w = NULL,
            svd_fns = c("bootSVD", "corpcor", "svd"),
            maxiter = 1000) {
     svd_fns <- match.arg(svd_fns)
@@ -36,17 +37,22 @@ modded_imputeMCA <-
       stop("Not Supported")
     )
 
-    ########## Debut programme principal
+    # Validate input
     validate_MCA(don)
-
     don <- droplevels(don)
     ncol_don <- ncol(don)
     nrow_don <- nrow(don)
 
-    row.w <- rep(1 / nrow_don, nrow_don)
+    # Initialize weights if not provided
+    if (is.null(row.w)) {
+      row.w <- rep(1 / nrow_don, nrow_don)
+    } else {
+      # Normalize weights to sum to 1
+      row.w <- row.w / sum(row.w)
+    }
 
     if (ncp == 0) {
-      tab.disj <- tab.disjonctif.prop(don, NULL)
+      tab.disj <- tab.disjonctif.prop(don, NULL, row.w = row.w)
       compObs <- find.category.1(don, tab.disj)
       return(list(tab.disj = tab.disj, completeObs = compObs))
     }
@@ -55,6 +61,7 @@ modded_imputeMCA <-
     tab.disj.NA <- tab.disjonctif(don)
     tab.disj.comp <- tab.disjonctif.prop(don, seed, row.w = row.w)
     stopifnot("tab.disjonctif.prop should not return any NA" = !anyNA(tab.disj.comp))
+
     # Repeatedly calculated values
     ncol_tab <- ncol(tab.disj.comp)
 
@@ -77,65 +84,64 @@ modded_imputeMCA <-
     while (continue) {
       nbiter <- nbiter + 1
       stopifnot("maxiter reached" = nbiter <= maxiter)
-      # weights are always > 0, ncol_don always > 0. So if value is smaller than
-      # zero then it's not because of ncol_don
 
-      sum_weighted <- colSums(tab.disj.comp * row.w[1])
+      # Calculate weighted column means using row weights
+      sum_weighted <- colSums(tab.disj.comp * row.w)
       M <- sum_weighted / ncol_don
+
       if (any(M < 0)) {
-        stop(
-          paste(
-            "The algorithm fails to converge. Choose a number of components (ncp) less or equal than ",
-            ncp - 1,
-            " or a number of iterations (maxiter) less or equal than ",
-            maxiter - 1,
-            sep = ""
-          )
-        )
+        stop(paste(
+          "The algorithm fails to converge. Choose a number of components (ncp) less or equal than ",
+          ncp - 1, " or a number of iterations (maxiter) less or equal than ",
+          maxiter - 1,
+          sep = ""
+        ))
       }
 
+      # Center and scale with weights
       Z <- t(t(tab.disj.comp) / sum_weighted)
-      Z <- t(t(Z) - colSums(Z * row.w[1]))
+      weighted_means <- colSums(Z * row.w)
+      Z <- t(t(Z) - weighted_means)
       Zscale <- t(t(Z) * sqrt(M))
 
-      # Run svd based on the Zscale matrix
-      # svd.Zscale <- FactoMineR::svd.triplet(Zscale, row.w = row.w, ncp = ncp)
+      # Run weighted SVD
       svd.Zscale <- modded_svd.triplet(Zscale, row.w = row.w, ncp = ncp, svd_fns = svd_fns)
 
-      # Regularization is meaningless if ncp is too high. In which case moyeig to zero
+      # Handle regularization
       if (regularize == FALSE) {
         moyeig <- 0
       } else {
-        # Regularizing
-        if (nrow(don) > (k_j)) {
+        if (nrow(don) > k_j) {
           moyeig <- mean(svd.Zscale$vs[-c(ncp_vec, (k_j + 1):ncol_tab)]^2)
         } else {
-          moyeig <-
-            mean(svd.Zscale$vs[-c(ncp_vec, ncol_tab:length(svd.Zscale$vs))]^2)
+          moyeig <- mean(svd.Zscale$vs[-c(ncp_vec, ncol_tab:length(svd.Zscale$vs))]^2)
         }
         moyeig <- min(moyeig * coeff.ridge, svd.Zscale$vs[ncp + 1]^2)
       }
+
+      # Calculate eigenvectors with shrinkage
       eig.shrunk <- ((svd.Zscale$vs[ncp_vec]^2 - moyeig) / svd.Zscale$vs[ncp_vec])
       rec <- tcrossprod(
         t(t(svd.Zscale$U[, ncp_vec, drop = FALSE]) * eig.shrunk),
         svd.Zscale$V[, ncp_vec, drop = FALSE]
       )
 
+      # Reconstruct the table
       tab.disj.rec <- t(t(rec) / sqrt(M)) + matrix(1, nrow(rec), ncol(rec))
       tab.disj.rec <- t(t(tab.disj.rec) * sum_weighted)
 
+      # Check convergence using weighted difference
       diff <- tab.disj.rec - tab.disj.rec.old
       diff[hidden] <- 0
       relch <- sum(diff^2 * row.w)
       tab.disj.rec.old <- tab.disj.rec
       tab.disj.comp[hidden] <- tab.disj.rec[hidden]
       continue <- (relch > threshold) && (nbiter < maxiter)
-      # End of while loop
     }
 
     compObs <- find.category.1(don, tab.disj.comp)
     return(list(tab.disj = tab.disj.comp, completeObs = compObs))
-  }
+}
 
 #' Assign Category Based on Most Likely tabdisj
 #'
@@ -144,16 +150,32 @@ modded_imputeMCA <-
 #'
 #' @return imputed data.frame with values based on most likely category
 find.category.1 <- function(X, tabdisj) {
-  nbdummy <- rep(1, ncol(X))
-  is.quali <- which(!unlist(lapply(X, is.numeric)))
-  nbdummy[is.quali] <-
-    unlist(lapply(X[, is.quali, drop = FALSE], nlevels))
-  vec <- c(0, cumsum(nbdummy))
+  nbdummy <- vapply(X, nlevels, FUN.VALUE = numeric(1))
+  vec <- c(0L, cumsum(nbdummy))
   Xres <- X
-  for (i in is.quali) {
-    temp <-
-      as.factor(levels(X[, i])[apply(tabdisj[, (vec[i] + 1):vec[i + 1]], 1, which.max)])
-    Xres[, i] <- factor(temp, levels(X[, is.quali][, i]))
+
+  for (i in seq_len(ncol(X))) {
+    max_indices <- max.col(
+      tabdisj[, (vec[i] + 1L):vec[i + 1L], drop = FALSE],
+      ties.method = "first"
+    )
+    Xres[[i]] <- factor(levels(X[[i]])[max_indices],levels = levels(X[[i]]))
   }
+
   return(Xres)
 }
+
+# find.category.1 <- function(X, tabdisj) {
+#   nbdummy <- rep(1, ncol(X))
+#   is.quali <- which(!unlist(lapply(X, is.numeric)))
+#   nbdummy[is.quali] <-
+#     unlist(lapply(X[, is.quali, drop = FALSE], nlevels))
+#   vec <- c(0, cumsum(nbdummy))
+#   Xres <- X
+#   for (i in is.quali) {
+#     temp <-
+#       as.factor(levels(X[, i])[apply(tabdisj[, (vec[i] + 1):vec[i + 1]], 1, which.max)])
+#     Xres[, i] <- factor(temp, levels(X[, is.quali][, i]))
+#   }
+#   return(Xres)
+# }

@@ -10,6 +10,7 @@ modded_imputeMCA(
   coeff.ridge = 1,
   threshold = 1e-06,
   seed = NULL,
+  row.w = NULL,
   svd_fns = c("bootSVD", "corpcor", "svd"),
   maxiter = 1000
 )
